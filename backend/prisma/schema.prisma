@@ -1,0 +1,373 @@
+// ============================================================
+// LINEAGE — Prisma Schema
+// Multi-tenant genomics clinical platform
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── TENANTS (Clinical centers) ────────────────────────────────
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String                          // "Instituto del Corazón de Bucaramanga"
+  slug        String   @unique               // "instituto-corazon-bga"
+  country     String   @default("CO")
+  timezone    String   @default("America/Bogota")
+  isActive    Boolean  @default(true)
+  plan        TenantPlan @default(FREE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  patients    Patient[]
+  surveys     SurveyTemplate[]
+
+  @@map("tenants")
+}
+
+enum TenantPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+// ── USERS (Clinical team members) ────────────────────────────
+model User {
+  id           String    @id @default(uuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  email        String
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         UserRole  @default(CLINICIAN)
+  specialty    String?                        // "Cardiología", "Genética Médica"
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  createdPatients  Patient[]
+  refreshTokens    RefreshToken[]
+  auditLogs        AuditLog[]
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+enum UserRole {
+  SUPER_ADMIN      // Lineage platform admin
+  TENANT_ADMIN     // Center administrator
+  CLINICIAN        // Geneticist / Cardiologist
+  COUNSELOR        // Genetic counselor
+  NURSE            // Nursing / admin staff
+  RESEARCHER       // Anonymized data access only
+}
+
+// ── REFRESH TOKENS ────────────────────────────────────────────
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+// ── PATIENTS ──────────────────────────────────────────────────
+model Patient {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  createdById  String
+  createdBy    User     @relation(fields: [createdById], references: [id])
+
+  // Identification
+  firstName    String
+  lastName     String
+  documentType String   @default("CC")      // CC, TI, CE, Passport
+  documentNum  String?
+  dateOfBirth  DateTime?
+  sex          Sex
+  email        String?
+  phone        String?
+  city         String?
+  country      String   @default("CO")
+
+  // Clinical
+  referralReason String?
+  clinicalNotes  String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  surveyTokens   SurveyToken[]
+  familyTree     FamilyTree?
+  clinicalRecord ClinicalRecord?
+  auditLogs      AuditLog[]
+
+  @@map("patients")
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
+}
+
+// ── SURVEY TEMPLATES (Dynamic, extensible) ───────────────────
+model SurveyTemplate {
+  id          String   @id @default(uuid())
+  tenantId    String?                        // null = global template (Lineage default)
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  name        String                         // "Cardiomiopatías Familiares"
+  slug        String                         // "cardiomiopatias"
+  description String?
+  category    SurveyCategory
+  version     Int      @default(1)
+  isActive    Boolean  @default(true)
+  isGlobal    Boolean  @default(false)      // Lineage-provided templates
+  schema      Json                           // Full survey structure (sections, questions, logic)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tokens      SurveyToken[]
+
+  @@map("survey_templates")
+}
+
+enum SurveyCategory {
+  CARDIOMYOPATHY       // Current: cardiomiopatías familiares
+  CHANNELOPATHY        // Future: canalopatías
+  HEREDITARY_CANCER    // Future: cáncer hereditario
+  NEUROLOGICAL         // Future: enfermedades neurológicas
+  CONNECTIVE_TISSUE    // Future: Marfan, etc.
+  METABOLIC            // Future: metabólicas
+  OTHER
+}
+
+// ── SURVEY TOKENS (One-time patient links) ───────────────────
+model SurveyToken {
+  id             String      @id @default(uuid())
+  token          String      @unique @default(uuid())  // UUID in the URL
+  patientId      String
+  patient        Patient     @relation(fields: [patientId], references: [id])
+  templateId     String
+  template       SurveyTemplate @relation(fields: [templateId], references: [id])
+  status         TokenStatus @default(PENDING)
+  expiresAt      DateTime                              // 30 days default
+  sentAt         DateTime?
+  openedAt       DateTime?
+  completedAt    DateTime?
+  responses      Json?                                 // Raw patient responses
+  createdAt      DateTime    @default(now())
+
+  @@map("survey_tokens")
+}
+
+enum TokenStatus {
+  PENDING      // Generated, not yet sent
+  SENT         // Email sent to patient
+  OPENED       // Patient opened the link
+  IN_PROGRESS  // Patient started filling
+  COMPLETED    // Patient submitted
+  EXPIRED      // Past expiry date
+  REVIEWED     // Clinical team reviewed
+}
+
+// ── FAMILY TREE (Generated from survey) ──────────────────────
+model FamilyTree {
+  id          String   @id @default(uuid())
+  patientId   String   @unique
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  members     FamilyMember[]
+  svgSnapshot String?                        // Cached SVG render
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("family_trees")
+}
+
+model FamilyMember {
+  id              String     @id @default(uuid())
+  familyTreeId    String
+  familyTree      FamilyTree @relation(fields: [familyTreeId], references: [id])
+
+  // Identity
+  firstName       String?
+  lastName        String?
+  relationship    String                     // "father", "mat_grandmother", etc.
+  sex             Sex
+  dateOfBirth     DateTime?
+  ageAtRecord     Int?
+
+  // Status
+  isAlive         Boolean    @default(true)
+  ageAtDeath      Int?
+  causeOfDeath    String?
+  autopsyPerformed Boolean?
+
+  // Cardiac history
+  hasCardiacHistory  Boolean @default(false)
+  cardiacDescription String?
+
+  // Pedigree position (for rendering)
+  generation      Int                        // 0=proband, 1=parents, 2=grandparents, -1=children
+  positionX       Float?
+  positionY       Float?
+
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@map("family_members")
+}
+
+// ── CLINICAL RECORD ───────────────────────────────────────────
+model ClinicalRecord {
+  id          String   @id @default(uuid())
+  patientId   String   @unique
+  patient     Patient  @relation(fields: [patientId], references: [id])
+
+  // Phenotype
+  phenotypes  PhenotypeEntry[]
+
+  // Genetics
+  variants    GeneticVariant[]
+
+  // Notes
+  clinicalSummary String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("clinical_records")
+}
+
+// HPO-coded phenotype entries
+model PhenotypeEntry {
+  id               String         @id @default(uuid())
+  clinicalRecordId String
+  clinicalRecord   ClinicalRecord @relation(fields: [clinicalRecordId], references: [id])
+  hpoCode          String?                    // HP:0001635
+  hpoTerm          String                     // "Dilated cardiomyopathy"
+  status           PhenotypeStatus @default(PRESENT)
+  notes            String?
+  createdAt        DateTime       @default(now())
+
+  @@map("phenotype_entries")
+}
+
+enum PhenotypeStatus {
+  PRESENT
+  ABSENT
+  UNKNOWN
+}
+
+// ── GENETIC VARIANTS ──────────────────────────────────────────
+model GeneticVariant {
+  id               String         @id @default(uuid())
+  clinicalRecordId String
+  clinicalRecord   ClinicalRecord @relation(fields: [clinicalRecordId], references: [id])
+
+  // HGVS nomenclature
+  gene             String                     // "MYBPC3"
+  hgvsGenomic      String?                    // NC_000011.10:g.47352957G>A
+  hgvsCoding       String?                    // NM_000256.3:c.2905+1G>A
+  hgvsProtein      String?                    // p.Gly970Arg
+  transcriptId     String?                    // NM_000256.3
+  chromosome       String?                    // "11"
+  position         BigInt?
+
+  // Classification (ACMG/AMP)
+  classification   VariantClassification @default(VUS)
+  zygosity         Zygosity?
+  inheritancePattern String?                  // "Autosomal dominant"
+
+  // External IDs
+  clinvarId        String?
+  dbSnpId          String?
+  lovdId           String?
+
+  // VUS tracking
+  isVUS            Boolean @default(false)
+  lastCheckedAt    DateTime?
+  nextCheckAt      DateTime?                  // +6 months from last check
+  trackingActive   Boolean @default(true)
+
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  reclassifications VUSReclassification[]
+  externalChecks    VUSExternalCheck[]
+
+  @@map("genetic_variants")
+}
+
+enum VariantClassification {
+  PATHOGENIC              // Class 5
+  LIKELY_PATHOGENIC       // Class 4
+  VUS                     // Class 3 — Variant of Uncertain Significance
+  LIKELY_BENIGN           // Class 2
+  BENIGN                  // Class 1
+}
+
+enum Zygosity {
+  HETEROZYGOUS
+  HOMOZYGOUS
+  HEMIZYGOUS
+  COMPOUND_HETEROZYGOUS
+}
+
+// ── VUS TRACKING ──────────────────────────────────────────────
+model VUSReclassification {
+  id              String         @id @default(uuid())
+  variantId       String
+  variant         GeneticVariant @relation(fields: [variantId], references: [id])
+  previousClass   VariantClassification
+  newClass        VariantClassification
+  source          String                     // "ClinVar", "Manual", "LOVD"
+  evidenceSummary String?
+  reclassifiedAt  DateTime @default(now())
+
+  @@map("vus_reclassifications")
+}
+
+model VUSExternalCheck {
+  id              String         @id @default(uuid())
+  variantId       String
+  variant         GeneticVariant @relation(fields: [variantId], references: [id])
+  database        String                     // "ClinVar", "gnomAD", "LOVD"
+  rawResponse     Json?                      // Full API response stored
+  classificationFound VariantClassification?
+  alleleFrequency Float?
+  checkedAt       DateTime @default(now())
+
+  @@map("vus_external_checks")
+}
+
+// ── AUDIT LOG ─────────────────────────────────────────────────
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  patientId  String?
+  patient    Patient? @relation(fields: [patientId], references: [id])
+  action     String                          // "patient.created", "variant.classified"
+  entity     String                          // "Patient", "GeneticVariant"
+  entityId   String?
+  metadata   Json?                           // Additional context
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@map("audit_logs")
+}

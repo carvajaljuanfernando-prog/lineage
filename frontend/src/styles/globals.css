@@ -1,0 +1,171 @@
+/* ── LINEAGE GLOBAL STYLES ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Brand */
+  --lineage-900: #0f1a2e;
+  --lineage-800: #1a2d4a;
+  --lineage-700: #1e3a5f;
+  --lineage-600: #2563a8;
+  --lineage-500: #3b82c4;
+  --lineage-400: #60a5d8;
+  --lineage-100: #dbeafe;
+  --lineage-50:  #eff6ff;
+
+  /* Semantic */
+  --success: #16a34a;
+  --success-bg: #f0fdf4;
+  --warning: #d97706;
+  --warning-bg: #fffbeb;
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --info: #0284c7;
+  --info-bg: #f0f9ff;
+
+  /* Neutrals */
+  --gray-50:  #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e1;
+  --gray-400: #94a3b8;
+  --gray-500: #64748b;
+  --gray-600: #475569;
+  --gray-700: #334155;
+  --gray-800: #1e293b;
+  --gray-900: #0f172a;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Playfair Display', Georgia, serif;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadow */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--gray-50);
+  color: var(--gray-800);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── TYPOGRAPHY ── */
+h1 { font-family: var(--font-display); font-size: 28px; font-weight: 500; color: var(--gray-900); }
+h2 { font-size: 20px; font-weight: 600; color: var(--gray-800); }
+h3 { font-size: 16px; font-weight: 600; color: var(--gray-700); }
+
+/* ── FORMS ── */
+input, select, textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--gray-800);
+  background: white;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--lineage-500);
+  box-shadow: 0 0 0 3px rgba(59,130,196,0.12);
+}
+input::placeholder { color: var(--gray-400); }
+textarea { resize: vertical; min-height: 80px; }
+label { display: block; font-size: 12px; font-weight: 500; color: var(--gray-600); margin-bottom: 4px; letter-spacing: .3px; }
+
+/* ── BUTTONS ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: var(--radius-md);
+  font-size: 14px; font-weight: 500; font-family: var(--font-sans);
+  cursor: pointer; transition: all .15s; border: 1px solid transparent;
+  text-decoration: none; white-space: nowrap;
+}
+.btn-primary { background: var(--lineage-600); color: white; border-color: var(--lineage-700); }
+.btn-primary:hover { background: var(--lineage-700); }
+.btn-secondary { background: white; color: var(--gray-700); border-color: var(--gray-300); }
+.btn-secondary:hover { background: var(--gray-50); border-color: var(--gray-400); }
+.btn-danger { background: var(--danger-bg); color: var(--danger); border-color: #fecaca; }
+.btn-danger:hover { background: #fee2e2; }
+.btn-ghost { background: transparent; color: var(--gray-600); border-color: transparent; }
+.btn-ghost:hover { background: var(--gray-100); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-lg { padding: 10px 22px; font-size: 15px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── CARDS ── */
+.card {
+  background: white; border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg); padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+.card-header { padding-bottom: 14px; border-bottom: 1px solid var(--gray-100); margin-bottom: 16px; }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 20px;
+  font-size: 11px; font-weight: 500; letter-spacing: .3px;
+}
+.badge-blue   { background: var(--lineage-50); color: var(--lineage-700); }
+.badge-green  { background: var(--success-bg); color: var(--success); }
+.badge-yellow { background: var(--warning-bg); color: var(--warning); }
+.badge-red    { background: var(--danger-bg); color: var(--danger); }
+.badge-gray   { background: var(--gray-100); color: var(--gray-600); }
+
+/* ── ALERTS ── */
+.alert { padding: 12px 16px; border-radius: var(--radius-md); font-size: 13px; line-height: 1.6; border: 1px solid; }
+.alert-info    { background: var(--info-bg); color: #0c4a6e; border-color: #bae6fd; }
+.alert-warning { background: var(--warning-bg); color: #78350f; border-color: #fde68a; }
+.alert-danger  { background: var(--danger-bg); color: #7f1d1d; border-color: #fecaca; }
+.alert-success { background: var(--success-bg); color: #14532d; border-color: #bbf7d0; }
+
+/* ── LAYOUT ── */
+.container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+/* ── DIVIDER ── */
+.divider { border: none; border-top: 1px solid var(--gray-200); margin: 16px 0; }
+
+/* ── SPINNER ── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--gray-200); border-top-color: var(--lineage-600);
+  border-radius: 50%; animation: spin .7s linear infinite;
+  display: inline-block;
+}
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead tr { background: var(--gray-50); }
+th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--gray-200); }
+td { padding: 12px 14px; border-bottom: 1px solid var(--gray-100); font-size: 13.5px; }
+tbody tr:hover { background: var(--gray-50); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--gray-100); }
+::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 3px; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  h1 { font-size: 22px; }
+}

@@ -1,8 +1,12 @@
 // lib/api.ts — Axios instance with JWT interceptors
 import axios from 'axios'
 
+const BASE_URL = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api/v1`
+  : '/api/v1'
+
 export const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -23,7 +27,7 @@ api.interceptors.response.use(
       try {
         const refreshToken = localStorage.getItem('lineage_refresh_token')
         if (!refreshToken) throw new Error('No refresh token')
-        const { data } = await axios.post('/api/v1/auth/refresh', { refreshToken })
+        const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken })
         localStorage.setItem('lineage_access_token', data.accessToken)
         localStorage.setItem('lineage_refresh_token', data.refreshToken)
         original.headers.Authorization = `Bearer ${data.accessToken}`

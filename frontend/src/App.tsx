@@ -13,6 +13,8 @@ import { DashboardPage } from './pages/dashboard/DashboardPage'
 import { PatientsPage } from './pages/patients/PatientsPage'
 import { PatientDetailPage } from './pages/patients/PatientDetailPage'
 import { NewPatientPage } from './pages/patients/NewPatientPage'
+import { PedigreePage } from './pages/patients/PedigreePage'
+import { SurveyReviewPage } from './pages/surveys/SurveyReviewPage'
 
 // Public (patient survey)
 import { SurveyPage } from './pages/surveys/SurveyPage'
@@ -45,6 +47,8 @@ export default function App() {
           <Route path="patients" element={<PatientsPage />} />
           <Route path="patients/new" element={<NewPatientPage />} />
           <Route path="patients/:id" element={<PatientDetailPage />} />
+          <Route path="patients/:id/pedigree" element={<PedigreePage />} />
+          <Route path="surveys/review/:tokenId" element={<SurveyReviewPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

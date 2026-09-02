@@ -4,9 +4,6 @@ import { useAuthStore } from '../../lib/auth.store'
 const navItems = [
   { to: '/dashboard', icon: '⬡', label: 'Panel Principal' },
   { to: '/patients',  icon: '◈', label: 'Pacientes' },
-  { to: '/surveys',   icon: '◉', label: 'Encuestas' },
-  { to: '/variants',  icon: '⬟', label: 'Variantes' },
-  { to: '/users',     icon: '◎', label: 'Equipo' },
 ]
 
 export function DashboardLayout() {

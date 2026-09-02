@@ -68,6 +68,12 @@ const css = `
 .sv .aprox { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 12.5px; color: #8b5e3c; cursor: pointer; }
 .sv .aprox input { width: auto; }
 .sv .nota { font-size: 12px; color: #8b5e3c; font-style: italic; margin: -4px 0 10px; }
+.sv .consent-box { background: #fdfaf6; border: 1px solid #e0c9a8; border-radius: 8px; padding: 16px 18px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-size: 12.8px; line-height: 1.75; color: #3b1f0e; }
+.sv .consent-chk { display: flex; gap: 9px; align-items: flex-start; padding: 12px 14px; border: 1px solid #e0c9a8; border-radius: 8px; margin-bottom: 10px; cursor: pointer; background: rgba(245,237,224,.4); }
+.sv .consent-chk input { width: auto; margin-top: 2px; flex-shrink: 0; }
+.sv .consent-chk.on { border-color: #7c3a1e; background: rgba(124,58,30,.06); }
+.sv .consent-chk-t { font-size: 13.5px; line-height: 1.6; }
+.sv .consent-meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: #8b5e3c; margin-top: 6px; }
 .sv .warn { background: #fef9f0; border: 1px solid #f0d08a; border-radius: 8px; padding: 12px 15px; color: #7c4a00; font-size: 13px; line-height: 1.7; margin-bottom: 14px; }
 .sv .rrow { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid rgba(224,201,168,.4); font-size: 13.5px; }
 .sv .rl { color: #8b5e3c; } .sv .rv { text-align: right; max-width: 60%; }
@@ -253,7 +259,9 @@ function Lista({ items, onChange, empty, tituloBase, addLabel, esHermano }: any)
 /* ═══ PÁGINA PRINCIPAL ═══ */
 export function SurveyPage() {
   const { token } = useParams<{ token: string }>()
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error' | 'completed'>('loading')
+  const [status, setStatus] = useState<'loading' | 'consent' | 'ready' | 'error' | 'completed'>('loading')
+  const [consent, setConsent] = useState({ fullName: '', documentNum: '', acceptMain: false, acceptResearch: false })
+  const [consentSending, setConsentSending] = useState(false)
   const [error, setError] = useState('')
   const [meta, setMeta] = useState<any>(null)
   const [step, setStep] = useState(0)
@@ -270,7 +278,15 @@ export function SurveyPage() {
       .then(res => {
         setMeta(res.data)
         if (res.data.existingResponses) setR({ ...initialResponses(), ...res.data.existingResponses })
-        setStatus('ready')
+        if (res.data.consentAccepted) {
+          setStatus('ready')
+        } else {
+          setConsent(c => ({
+            ...c,
+            fullName: [res.data.patientFirstName, res.data.patientLastName].filter(Boolean).join(' '),
+          }))
+          setStatus('consent')
+        }
       })
       .catch(err => {
         setError(err.response?.data?.message || 'Enlace no válido o expirado')
@@ -280,7 +296,7 @@ export function SurveyPage() {
 
   /* auto-guardado con debounce de 2s */
   useEffect(() => {
-    if (status !== 'ready') return
+    if (status !== 'ready') return  // no guarda sin consentimiento aceptado
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
       try {
@@ -303,6 +319,27 @@ export function SurveyPage() {
     } finally { setSending(false) }
   }
 
+  const aceptarConsentimiento = async () => {
+    setError('')
+    if (!consent.fullName.trim() || !consent.documentNum.trim()) {
+      setError('Por favor escriba su nombre completo y su número de documento.'); return
+    }
+    if (!consent.acceptMain) {
+      setError('Debe aceptar el tratamiento de sus datos de salud para continuar.'); return
+    }
+    setConsentSending(true)
+    try {
+      await api.post(`/public/survey/${token}/consent`, {
+        fullName: consent.fullName.trim(),
+        documentNum: consent.documentNum.trim(),
+        research: consent.acceptResearch,
+      })
+      setStatus('ready')
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'No se pudo registrar la autorización. Intente de nuevo.')
+    } finally { setConsentSending(false) }
+  }
+
   /* ── pantallas de estado ── */
   if (status === 'loading') return (
     <><style>{css}</style>
@@ -321,6 +358,97 @@ export function SurveyPage() {
       </div>
     </div></>
   )
+  /* ── PANTALLA DE CONSENTIMIENTO INFORMADO ── */
+  if (status === 'consent') return (
+    <>
+      <style>{css}</style>
+      <div className="sv">
+        <div className="sv-hdr">
+          <div className="sv-hdr-in">
+            <span style={{ color: '#ef4444', fontSize: 22 }}>♥</span>
+            <div>
+              <div style={{ color: '#f5ede0', fontSize: 14, fontWeight: 700 }}>Consentimiento informado</div>
+              <div style={{ color: '#c9a87c', fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                Antes de comenzar la encuesta
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="sv-main" style={{ paddingBottom: 40 }}>
+          <div className="sv-card">
+            <p className="sv-title">Autorización para el tratamiento de sus datos</p>
+            <p className="sv-sub">
+              {meta?.institucion} · {meta?.medico}
+            </p>
+
+            <div className="warn">
+              Antes de responder la encuesta, por favor lea esta autorización. Es un requisito de la
+              <b> Ley 1581 de 2012</b> de protección de datos personales. Puede descargar una copia después de aceptarla.
+            </div>
+
+            <div className="consent-box">{meta?.consentText}</div>
+
+            <div style={{ marginTop: 18 }}>
+              <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>Su autorización</p>
+
+              <label className={'consent-chk' + (consent.acceptMain ? ' on' : '')}>
+                <input type="checkbox" checked={consent.acceptMain}
+                  onChange={e => setConsent({ ...consent, acceptMain: e.target.checked })} />
+                <span className="consent-chk-t">
+                  <b>He leído y autorizo</b> el tratamiento de mis datos personales y de salud, y los de mis familiares
+                  que aquí registre, para los fines de atención en salud descritos. <b>(Obligatorio)</b>
+                </span>
+              </label>
+
+              <label className={'consent-chk' + (consent.acceptResearch ? ' on' : '')}>
+                <input type="checkbox" checked={consent.acceptResearch}
+                  onChange={e => setConsent({ ...consent, acceptResearch: e.target.checked })} />
+                <span className="consent-chk-t">
+                  Adicionalmente, autorizo el uso de mis datos <b>anonimizados</b> con fines de investigación científica
+                  y docencia. <b>(Opcional — puede continuar sin marcarla)</b>
+                </span>
+              </label>
+
+              <p style={{ fontWeight: 700, fontSize: 14, margin: '16px 0 8px' }}>Firma digital</p>
+              <p className="nota">Escriba su nombre completo y documento. Esto equivale a su firma.</p>
+              <div className="g2" style={{ marginBottom: 8 }}>
+                <Fld label="Nombre completo">
+                  <input value={consent.fullName}
+                    onChange={e => setConsent({ ...consent, fullName: e.target.value })}
+                    placeholder="Nombre y apellidos" />
+                </Fld>
+                <Fld label="Número de documento">
+                  <input value={consent.documentNum}
+                    onChange={e => setConsent({ ...consent, documentNum: e.target.value })}
+                    placeholder="Cédula o documento" />
+                </Fld>
+              </div>
+              <div className="consent-meta">
+                <span>Fecha: {new Date().toLocaleString('es-CO')}</span>
+                <span>Versión del documento: {meta?.consentVersion}</span>
+              </div>
+
+              {error && (
+                <div className="warn" style={{ marginTop: 14, borderColor: '#fca5a5', color: '#b91c1c', background: '#fff5f5' }}>
+                  ⚠ {error}
+                </div>
+              )}
+
+              <button className="btn btn-p" style={{ width: '100%', marginTop: 16, padding: '13px' }}
+                onClick={aceptarConsentimiento} disabled={consentSending}>
+                {consentSending ? <><span className="spin" />Registrando…</> : 'Acepto y continúo a la encuesta'}
+              </button>
+              <p className="nota" style={{ textAlign: 'center', marginTop: 10 }}>
+                Si no desea autorizar, simplemente cierre esta ventana y comuníquelo a su equipo médico.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+
   if (status === 'completed') return (
     <><style>{css}</style>
     <div className="sv" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>

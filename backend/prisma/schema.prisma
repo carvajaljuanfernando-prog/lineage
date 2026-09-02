@@ -165,6 +165,17 @@ model SurveyToken {
   template       SurveyTemplate @relation(fields: [templateId], references: [id])
   status         TokenStatus @default(PENDING)
   expiresAt      DateTime                              // 30 days default
+
+  // ── Consentimiento informado (Ley 1581/2012) ──
+  consentAccepted     Boolean   @default(false)
+  consentAcceptedAt   DateTime?
+  consentVersion      String?                          // versión del texto aceptado
+  consentFullName     String?                          // firma digital: nombre escrito
+  consentDocumentNum  String?                          // documento de identidad
+  consentResearch     Boolean   @default(false)        // autorización OPCIONAL para investigación
+  consentIpAddress    String?
+  consentUserAgent    String?
+  consentSnapshot     String?                          // texto íntegro aceptado
   sentAt         DateTime?
   openedAt       DateTime?
   completedAt    DateTime?

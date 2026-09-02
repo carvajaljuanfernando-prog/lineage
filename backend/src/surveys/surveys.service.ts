@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { CONSENT_VERSION, buildConsentText } from './consent.text';
 
 @Injectable()
 export class SurveysService {
@@ -58,7 +59,16 @@ export class SurveysService {
   async resolveToken(token: string) {
     const record = await this.prisma.surveyToken.findUnique({
       where: { token },
-      include: { template: true, patient: { select: { firstName: true, sex: true } } },
+      include: {
+        template: true,
+        patient: {
+          select: {
+            firstName: true, lastName: true, sex: true,
+            tenant: { select: { name: true } },
+            createdBy: { select: { firstName: true, lastName: true, specialty: true } },
+          },
+        },
+      },
     });
 
     if (!record) throw new NotFoundException('Enlace no válido');
@@ -77,13 +87,87 @@ export class SurveysService {
       });
     }
 
+    const institucion = record.patient.tenant?.name || 'la institución tratante';
+    const medico = record.patient.createdBy
+      ? `Dr(a). ${record.patient.createdBy.firstName} ${record.patient.createdBy.lastName}`
+      : 'el profesional tratante';
+
     return {
       tokenId: record.id,
       patientFirstName: record.patient.firstName,
+      patientLastName: record.patient.lastName,
       patientSex: record.patient.sex,
       template: record.template,
       existingResponses: record.responses,
+      // ── Consentimiento ──
+      consentAccepted: record.consentAccepted,
+      consentVersion: CONSENT_VERSION,
+      consentText: buildConsentText({
+        institucion,
+        medico,
+        especialidad: record.patient.createdBy?.specialty || null,
+        encuesta: record.template.name,
+      }),
+      institucion,
+      medico,
     };
+  }
+
+  // ── Público: registrar aceptación del consentimiento ──────
+  async acceptConsent(
+    token: string,
+    data: { fullName: string; documentNum: string; research: boolean },
+    meta: { ip?: string; userAgent?: string },
+  ) {
+    const record = await this.prisma.surveyToken.findUnique({
+      where: { token },
+      include: {
+        template: true,
+        patient: {
+          select: {
+            tenant: { select: { name: true } },
+            createdBy: { select: { firstName: true, lastName: true, specialty: true } },
+          },
+        },
+      },
+    });
+    if (!record) throw new NotFoundException('Enlace no válido');
+    if (record.expiresAt < new Date()) throw new BadRequestException('Este enlace ha expirado.');
+    if (record.consentAccepted) return { accepted: true, alreadyAccepted: true };
+
+    if (!data.fullName?.trim() || !data.documentNum?.trim()) {
+      throw new BadRequestException('Debe registrar su nombre completo y número de documento.');
+    }
+
+    const institucion = record.patient.tenant?.name || 'la institución tratante';
+    const medico = record.patient.createdBy
+      ? `Dr(a). ${record.patient.createdBy.firstName} ${record.patient.createdBy.lastName}`
+      : 'el profesional tratante';
+    const snapshot = buildConsentText({
+      institucion,
+      medico,
+      especialidad: record.patient.createdBy?.specialty || null,
+      encuesta: record.template.name,
+    });
+
+    await this.prisma.surveyToken.update({
+      where: { token },
+      data: {
+        consentAccepted: true,
+        consentAcceptedAt: new Date(),
+        consentVersion: CONSENT_VERSION,
+        consentFullName: data.fullName.trim(),
+        consentDocumentNum: data.documentNum.trim(),
+        consentResearch: data.research === true,
+        consentIpAddress: meta.ip || null,
+        consentUserAgent: meta.userAgent || null,
+        consentSnapshot: snapshot,
+        status: record.status === 'PENDING' || record.status === 'SENT' ? 'IN_PROGRESS' : record.status,
+        openedAt: record.openedAt || new Date(),
+      },
+    });
+
+    return { accepted: true };
   }
 
   // ── Public: save progress (auto-save) ─────────────────────
@@ -91,6 +175,9 @@ export class SurveysService {
     const record = await this.prisma.surveyToken.findUnique({ where: { token } });
     if (!record || record.status === 'COMPLETED' || record.status === 'EXPIRED') {
       throw new BadRequestException('No se puede guardar en este enlace');
+    }
+    if (!record.consentAccepted) {
+      throw new BadRequestException('Debe aceptar el consentimiento informado antes de continuar.');
     }
     await this.prisma.surveyToken.update({
       where: { token },
@@ -108,6 +195,9 @@ export class SurveysService {
     if (!record) throw new NotFoundException('Enlace no válido');
     if (record.status === 'COMPLETED') throw new BadRequestException('Ya fue enviada');
     if (record.expiresAt < new Date()) throw new BadRequestException('Enlace expirado');
+    if (!record.consentAccepted) {
+      throw new BadRequestException('Debe aceptar el consentimiento informado antes de enviar.');
+    }
 
     await this.prisma.surveyToken.update({
       where: { token },

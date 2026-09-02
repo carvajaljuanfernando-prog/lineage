@@ -94,6 +94,7 @@ export function SurveyReviewPage() {
   const { tokenId } = useParams<{ tokenId: string }>()
   const navigate = useNavigate()
   const [msg, setMsg] = useState('')
+  const [verConsent, setVerConsent] = useState(false)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['survey-responses', tokenId],
@@ -108,6 +109,36 @@ export function SurveyReviewPage() {
     },
     onError: (e: any) => setMsg(e.response?.data?.message || 'No se pudo generar el pedigrí'),
   })
+
+  const descargarConsentimiento = () => {
+    if (!data?.consentSnapshot) return
+    const enc = [
+      '='.repeat(70),
+      'CONSTANCIA DE AUTORIZACIÓN PARA TRATAMIENTO DE DATOS PERSONALES',
+      '='.repeat(70),
+      '',
+      `Paciente: ${data.patient?.firstName || ''} ${data.patient?.lastName || ''}`,
+      `Firmado por: ${data.consentFullName || '—'}`,
+      `Documento: ${data.consentDocumentNum || '—'}`,
+      `Fecha y hora de aceptación: ${data.consentAcceptedAt ? new Date(data.consentAcceptedAt).toLocaleString('es-CO') : '—'}`,
+      `Versión del documento: ${data.consentVersion || '—'}`,
+      `Uso para investigación (anonimizado): ${data.consentResearch ? 'AUTORIZADO' : 'NO AUTORIZADO'}`,
+      `Dirección IP de origen: ${data.consentIpAddress || '—'}`,
+      `Navegador: ${data.consentUserAgent || '—'}`,
+      '',
+      '='.repeat(70),
+      'TEXTO ÍNTEGRO ACEPTADO POR EL PACIENTE',
+      '='.repeat(70),
+      '',
+      data.consentSnapshot,
+    ].join('\n')
+    const blob = new Blob([enc], { type: 'text/plain;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `consentimiento-${data.patient?.lastName || 'paciente'}.txt`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
 
   if (isLoading) return <div style={{ padding: 40, textAlign: 'center' }}><span className="spinner" /></div>
   if (error || !data) return <div style={{ padding: 40 }}><div className="alert alert-danger">No se encontró la encuesta.</div></div>
@@ -179,6 +210,47 @@ export function SurveyReviewPage() {
           Considere solicitar informes de autopsia si están disponibles.
         </div>
       )}
+
+      {/* Consentimiento informado */}
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3>Consentimiento informado</h3>
+          {data.consentAccepted
+            ? <span className="badge badge-green">Aceptado ✓</span>
+            : <span className="badge badge-red">No registrado</span>}
+        </div>
+        {data.consentAccepted ? (
+          <>
+            <Campo l="Firmado por" v={data.consentFullName} />
+            <Campo l="Documento" v={data.consentDocumentNum} />
+            <Campo l="Fecha y hora" v={data.consentAcceptedAt ? new Date(data.consentAcceptedAt).toLocaleString('es-CO') : '—'} />
+            <Campo l="Versión del documento" v={data.consentVersion} />
+            <Campo l="Uso para investigación (anonimizado)" v={data.consentResearch ? 'Autorizado' : 'No autorizado'} />
+            <Campo l="Dirección IP" v={data.consentIpAddress} />
+            <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap' }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => setVerConsent(v => !v)}>
+                {verConsent ? 'Ocultar texto aceptado' : 'Ver texto aceptado'}
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={descargarConsentimiento}>
+                ⤓ Descargar constancia
+              </button>
+            </div>
+            {verConsent && (
+              <pre style={{
+                marginTop: 14, background: 'var(--gray-50)', border: '1px solid var(--gray-200)',
+                borderRadius: 8, padding: 14, fontSize: 11.5, lineHeight: 1.7,
+                whiteSpace: 'pre-wrap', fontFamily: 'var(--font-sans)', color: 'var(--gray-700)',
+                maxHeight: 340, overflowY: 'auto',
+              }}>{data.consentSnapshot}</pre>
+            )}
+          </>
+        ) : (
+          <div className="alert alert-warning">
+            Esta encuesta no tiene consentimiento registrado. Corresponde a un enlace generado antes de que la
+            plataforma incorporara el consentimiento digital.
+          </div>
+        )}
+      </div>
 
       {/* Secciones */}
       <Seccion titulo="Hijos" contador={hijos.length}>

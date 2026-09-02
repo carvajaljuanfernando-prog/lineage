@@ -16,20 +16,44 @@ export class AuthService {
     private config: ConfigService,
   ) {}
 
-  // Validate user credentials (used by LocalStrategy)
-  async validateUser(email: string, password: string, tenantSlug: string) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-    if (!tenant) throw new UnauthorizedException('Centro clínico no encontrado');
+  // Validate user credentials.
+  // El correo identifica al usuario; el centro clínico se resuelve automáticamente.
+  // tenantSlug solo se usa como desempate si el mismo correo existe en varios centros.
+  async validateUser(email: string, password: string, tenantSlug?: string) {
+    const normalizedEmail = (email || '').trim().toLowerCase();
 
-    const user = await this.prisma.user.findUnique({
-      where: { tenantId_email: { tenantId: tenant.id, email } },
+    // Búsqueda insensible a mayúsculas para no depender de cómo se escribió al registrarse
+    const candidates = await this.prisma.user.findMany({
+      where: {
+        email: { equals: normalizedEmail, mode: 'insensitive' },
+        isActive: true,
+      },
+      include: { tenant: { select: { id: true, name: true, slug: true, isActive: true } } },
     });
-    if (!user || !user.isActive) throw new UnauthorizedException('Credenciales inválidas');
+
+    const usable = candidates.filter((u) => u.tenant?.isActive);
+    if (usable.length === 0) throw new UnauthorizedException('Credenciales inválidas');
+
+    let user = usable[0];
+
+    // Mismo correo en varios centros: se requiere elegir
+    if (usable.length > 1) {
+      if (!tenantSlug) {
+        throw new ConflictException({
+          statusCode: 409,
+          message: 'Este correo está registrado en varios centros clínicos. Seleccione uno.',
+          error: 'MULTIPLE_TENANTS',
+          tenants: usable.map((u) => ({ slug: u.tenant.slug, name: u.tenant.name })),
+        });
+      }
+      const match = usable.find((u) => u.tenant.slug === tenantSlug);
+      if (!match) throw new UnauthorizedException('Credenciales inválidas');
+      user = match;
+    }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Credenciales inválidas');
 
-    // Update last login
     await this.prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
@@ -100,6 +124,7 @@ export class AuthService {
     if (existing) throw new ConflictException('Este centro clínico ya está registrado');
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
+    const normalizedEmail = dto.email.trim().toLowerCase();
 
     const tenant = await this.prisma.tenant.create({
       data: {
@@ -108,7 +133,7 @@ export class AuthService {
         country: dto.country || 'CO',
         users: {
           create: {
-            email: dto.email,
+            email: normalizedEmail,
             passwordHash,
             firstName: dto.firstName,
             lastName: dto.lastName,

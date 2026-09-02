@@ -10,10 +10,10 @@ import { api } from '../../lib/api'
 
 const uid = () => Math.random().toString(36).slice(2, 9)
 
-const emptyHijo = () => ({ id: uid(), nombre: '', sexo: '', fechaNac: '', edad: '', fallecido: false, causaMuerte: '', edadMuerte: '', autopsia: '', problemaCardiaco: false, descripcionProblema: '' })
+const emptyHijo = () => ({ id: uid(), nombre: '', sexo: '', fechaNac: '', edad: '', fechaNacAprox: false, fallecido: false, fechaMuerte: '', causaMuerte: '', edadMuerte: '', fechaMuerteAprox: false, autopsia: '', problemaCardiaco: false, descripcionProblema: '' })
 const emptyHermano = () => ({ ...emptyHijo(), medioHermano: false, mismoProgenitor: '' })
-const emptyTio = () => ({ id: uid(), nombre: '', sexo: '', fechaNac: '', edad: '', fallecido: false, causaMuerte: '', edadMuerte: '', problemaCardiaco: false, descripcionProblema: '' })
-const emptyPariente = () => ({ id: uid(), nombre: '', fechaNac: '', vivo: 'si', edad: '', causaMuerte: '', edadMuerte: '', autopsia: '', problemasCorazon: 'no', descripcionCorazon: '' })
+const emptyTio = () => ({ id: uid(), nombre: '', sexo: '', fechaNac: '', edad: '', fechaNacAprox: false, fallecido: false, fechaMuerte: '', causaMuerte: '', edadMuerte: '', fechaMuerteAprox: false, problemaCardiaco: false, descripcionProblema: '' })
+const emptyPariente = () => ({ id: uid(), nombre: '', fechaNac: '', edad: '', fechaNacAprox: false, vivo: 'si', fechaMuerte: '', causaMuerte: '', edadMuerte: '', fechaMuerteAprox: false, autopsia: '', problemasCorazon: 'no', descripcionCorazon: '' })
 
 const initialResponses = () => ({
   hijos: [] as any[],
@@ -65,6 +65,9 @@ const css = `
 .sv .navbar { position: fixed; bottom: 0; left: 0; right: 0; background: #fdfaf6; border-top: 1px solid #e0c9a8; padding: 12px 16px; z-index: 60; }
 .sv .navbar-in { max-width: 780px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .sv .save-hint { color: #8b5e3c; font-size: 11.5px; font-style: italic; }
+.sv .aprox { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 12.5px; color: #8b5e3c; cursor: pointer; }
+.sv .aprox input { width: auto; }
+.sv .nota { font-size: 12px; color: #8b5e3c; font-style: italic; margin: -4px 0 10px; }
 .sv .warn { background: #fef9f0; border: 1px solid #f0d08a; border-radius: 8px; padding: 12px 15px; color: #7c4a00; font-size: 13px; line-height: 1.7; margin-bottom: 14px; }
 .sv .rrow { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid rgba(224,201,168,.4); font-size: 13.5px; }
 .sv .rl { color: #8b5e3c; } .sv .rv { text-align: right; max-width: 60%; }
@@ -101,25 +104,39 @@ function ParienteBlock({ p, onChange, titulo, femenino }: any) {
   return (
     <div className="pb">
       <div className="pb-h"><span className="pb-t">{titulo}</span></div>
-      <div className="g3" style={{ marginBottom: 10 }}>
+      <div className="g3" style={{ marginBottom: 4 }}>
         <Fld label="Nombre completo"><input value={p.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Nombre y apellidos" /></Fld>
         <Fld label="Fecha de nacimiento"><input type="date" value={p.fechaNac} onChange={e => set('fechaNac', e.target.value)} /></Fld>
-        <Fld label="Edad (aprox.)"><input type="number" min={0} max={130} value={p.edad} onChange={e => set('edad', e.target.value)} placeholder="años" /></Fld>
+        <Fld label="Edad"><input type="number" min={0} max={130} value={p.edad} onChange={e => set('edad', e.target.value)} placeholder="años" /></Fld>
       </div>
+      <label className="aprox" style={{ marginBottom: 10 }}>
+        <input type="checkbox" checked={!!p.fechaNacAprox} onChange={e => set('fechaNacAprox', e.target.checked)} />
+        La fecha o la edad son aproximadas (no las recuerdo con certeza)
+      </label>
       <div style={{ marginBottom: 10 }}>
         <label className="lb">{femenino ? '¿Está viva?' : '¿Está vivo?'}</label>
         <SiNo value={p.vivo} onChange={(v: string) => set('vivo', v)} name={`vivo_${p.id}`} labels={femenino ? ['Sí, viva', 'No, fallecida'] : ['Sí, vivo', 'No, fallecido']} />
       </div>
       {p.vivo === 'no' && (
-        <div className="g3" style={{ marginBottom: 10 }}>
-          <Fld label="Causa de la muerte"><input value={p.causaMuerte} onChange={e => set('causaMuerte', e.target.value)} placeholder="Si la conoce" /></Fld>
-          <Fld label="Edad al fallecer"><input type="number" min={0} value={p.edadMuerte} onChange={e => set('edadMuerte', e.target.value)} placeholder="años" /></Fld>
-          <Fld label="¿Se hizo autopsia?">
-            <select value={p.autopsia} onChange={e => set('autopsia', e.target.value)}>
-              <option value="">—</option><option value="si">Sí</option><option value="no">No</option><option value="no_se">No lo sé</option>
-            </select>
-          </Fld>
-        </div>
+        <>
+          <p className="nota">Responda lo que recuerde. Puede llenar solo la edad, solo la fecha, o ambas.</p>
+          <div className="g3" style={{ marginBottom: 4 }}>
+            <Fld label="Causa de la muerte"><input value={p.causaMuerte} onChange={e => set('causaMuerte', e.target.value)} placeholder="Si la conoce" /></Fld>
+            <Fld label="Fecha de fallecimiento"><input type="date" value={p.fechaMuerte} onChange={e => set('fechaMuerte', e.target.value)} /></Fld>
+            <Fld label="Edad al fallecer"><input type="number" min={0} max={130} value={p.edadMuerte} onChange={e => set('edadMuerte', e.target.value)} placeholder="años" /></Fld>
+          </div>
+          <label className="aprox" style={{ marginBottom: 10 }}>
+            <input type="checkbox" checked={!!p.fechaMuerteAprox} onChange={e => set('fechaMuerteAprox', e.target.checked)} />
+            La fecha o la edad de fallecimiento son aproximadas
+          </label>
+          <div style={{ marginBottom: 10, maxWidth: 280 }}>
+            <Fld label="¿Se hizo autopsia?">
+              <select value={p.autopsia} onChange={e => set('autopsia', e.target.value)}>
+                <option value="">—</option><option value="si">Sí</option><option value="no">No</option><option value="no_se">No lo sé</option>
+              </select>
+            </Fld>
+          </div>
+        </>
       )}
       <hr className="hr" />
       <div style={{ marginBottom: 8 }}>
@@ -148,7 +165,7 @@ function MiembroBlock({ m, onChange, onRemove, titulo, esHermano }: any) {
         <span className="pb-t">{titulo}</span>
         <button className="btn btn-d" onClick={onRemove}>✕ Quitar</button>
       </div>
-      <div className="g3" style={{ marginBottom: 10 }}>
+      <div className="g3" style={{ marginBottom: 4 }}>
         <Fld label="Nombre completo"><input value={m.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Nombre y apellidos" /></Fld>
         <Fld label="Sexo">
           <select value={m.sexo} onChange={e => set('sexo', e.target.value)}>
@@ -157,6 +174,13 @@ function MiembroBlock({ m, onChange, onRemove, titulo, esHermano }: any) {
         </Fld>
         <Fld label="Fecha de nacimiento"><input type="date" value={m.fechaNac} onChange={e => set('fechaNac', e.target.value)} /></Fld>
       </div>
+      <div className="g2" style={{ marginBottom: 4 }}>
+        <Fld label="Edad"><input type="number" min={0} max={130} value={m.edad} onChange={e => set('edad', e.target.value)} placeholder="años" /></Fld>
+      </div>
+      <label className="aprox" style={{ marginBottom: 10 }}>
+        <input type="checkbox" checked={!!m.fechaNacAprox} onChange={e => set('fechaNacAprox', e.target.checked)} />
+        La fecha o la edad son aproximadas
+      </label>
       {esHermano && (
         <div style={{ marginBottom: 10 }}>
           <label className="lb">¿Es medio hermano/a?</label>
@@ -175,17 +199,27 @@ function MiembroBlock({ m, onChange, onRemove, titulo, esHermano }: any) {
         <Bool value={m.fallecido} onChange={(v: boolean) => set('fallecido', v)} name={`fa_${m.id}`} yes="Sí, fallecido/a" />
       </div>
       {m.fallecido && (
-        <div className="g3" style={{ marginBottom: 10 }}>
-          <Fld label="Causa de la muerte"><input value={m.causaMuerte} onChange={e => set('causaMuerte', e.target.value)} /></Fld>
-          <Fld label="Edad al fallecer"><input type="number" min={0} value={m.edadMuerte} onChange={e => set('edadMuerte', e.target.value)} placeholder="años" /></Fld>
+        <>
+          <p className="nota">Responda lo que recuerde. Puede llenar solo la edad, solo la fecha, o ambas.</p>
+          <div className="g3" style={{ marginBottom: 4 }}>
+            <Fld label="Causa de la muerte"><input value={m.causaMuerte} onChange={e => set('causaMuerte', e.target.value)} placeholder="Si la conoce" /></Fld>
+            <Fld label="Fecha de fallecimiento"><input type="date" value={m.fechaMuerte} onChange={e => set('fechaMuerte', e.target.value)} /></Fld>
+            <Fld label="Edad al fallecer"><input type="number" min={0} max={130} value={m.edadMuerte} onChange={e => set('edadMuerte', e.target.value)} placeholder="años" /></Fld>
+          </div>
+          <label className="aprox" style={{ marginBottom: 10 }}>
+            <input type="checkbox" checked={!!m.fechaMuerteAprox} onChange={e => set('fechaMuerteAprox', e.target.checked)} />
+            La fecha o la edad de fallecimiento son aproximadas
+          </label>
           {m.autopsia !== undefined && (
-            <Fld label="¿Autopsia?">
-              <select value={m.autopsia} onChange={e => set('autopsia', e.target.value)}>
-                <option value="">—</option><option value="si">Sí</option><option value="no">No</option><option value="no_se">No lo sé</option>
-              </select>
-            </Fld>
+            <div style={{ marginBottom: 10, maxWidth: 280 }}>
+              <Fld label="¿Se hizo autopsia?">
+                <select value={m.autopsia} onChange={e => set('autopsia', e.target.value)}>
+                  <option value="">—</option><option value="si">Sí</option><option value="no">No</option><option value="no_se">No lo sé</option>
+                </select>
+              </Fld>
+            </div>
           )}
-        </div>
+        </>
       )}
       <hr className="hr" />
       <div style={{ marginBottom: 8 }}>

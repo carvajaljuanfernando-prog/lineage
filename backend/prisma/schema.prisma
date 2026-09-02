@@ -209,10 +209,13 @@ model FamilyMember {
   sex             Sex
   dateOfBirth     DateTime?
   ageAtRecord     Int?
+  birthApprox     Boolean    @default(false)   // fecha/edad de nacimiento aproximada
 
   // Status
   isAlive         Boolean    @default(true)
+  dateOfDeath     DateTime?
   ageAtDeath      Int?
+  deathApprox     Boolean    @default(false)   // fecha/edad de muerte aproximada
   causeOfDeath    String?
   autopsyPerformed Boolean?
 

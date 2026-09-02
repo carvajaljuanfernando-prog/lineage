@@ -240,8 +240,20 @@ export function PedigreePage() {
         ctx.beginPath(); ctx.moveTo(x - S - 6, y + S + 6); ctx.lineTo(x + S + 6, y - S - 6); ctx.stroke()
       }
       if (prob) {
-        ctx.fillStyle = '#7c3a1e'; ctx.font = 'bold 17px serif'; ctx.textAlign = 'left'
-        ctx.fillText('↗', x + S + 4, y + S + 4)
+        /* Flecha del probando: convención estándar (Bennett) —
+           diagonal desde abajo-izquierda apuntando al símbolo. */
+        const x1 = x - S - 24, y1 = y + S + 24     // cola
+        const x2 = x - S - 5,  y2 = y + S + 5      // punta
+        ctx.strokeStyle = '#7c3a1e'; ctx.fillStyle = '#7c3a1e'; ctx.lineWidth = 2
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke()
+        const ang = Math.atan2(y2 - y1, x2 - x1), cab = 7
+        ctx.beginPath()
+        ctx.moveTo(x2, y2)
+        ctx.lineTo(x2 - cab * Math.cos(ang - Math.PI / 7), y2 - cab * Math.sin(ang - Math.PI / 7))
+        ctx.lineTo(x2 - cab * Math.cos(ang + Math.PI / 7), y2 - cab * Math.sin(ang + Math.PI / 7))
+        ctx.closePath(); ctx.fill()
+        ctx.font = 'bold 10px Georgia, serif'; ctx.textAlign = 'right'
+        ctx.fillText('P', x1 - 2, y1 + 4)
       }
       ctx.restore()
 
@@ -288,9 +300,11 @@ export function PedigreePage() {
         ctx.strokeStyle = '#374151'; ctx.beginPath(); ctx.moveTo(xx - 9, yy + 9); ctx.lineTo(xx + 9, yy - 9); ctx.stroke()
       } else if (it.t === 'prob') {
         ctx.strokeStyle = '#7c3a1e'; ctx.fillStyle = '#fde8d8'
-        ctx.beginPath(); ctx.rect(xx - 6, yy - 6, 12, 12); ctx.fill(); ctx.stroke()
-        ctx.fillStyle = '#7c3a1e'; ctx.font = 'bold 10px serif'; ctx.textAlign = 'left'
-        ctx.fillText('↗', xx + 7, yy + 8)
+        ctx.beginPath(); ctx.rect(xx - 4, yy - 8, 12, 12); ctx.fill(); ctx.stroke()
+        ctx.strokeStyle = '#7c3a1e'; ctx.fillStyle = '#7c3a1e'; ctx.lineWidth = 1.6
+        ctx.beginPath(); ctx.moveTo(xx - 13, yy + 11); ctx.lineTo(xx - 6, yy + 5); ctx.stroke()
+        ctx.beginPath(); ctx.moveTo(xx - 5, yy + 4); ctx.lineTo(xx - 9, yy + 5); ctx.lineTo(xx - 7, yy + 9)
+        ctx.closePath(); ctx.fill()
       } else if (it.t === 'sq') {
         ctx.strokeStyle = it.s; ctx.fillStyle = it.f
         ctx.beginPath(); ctx.rect(xx - 6, yy - 6, 12, 12); ctx.fill(); ctx.stroke()

@@ -14,6 +14,7 @@ import { PatientsPage } from './pages/patients/PatientsPage'
 import { PatientDetailPage } from './pages/patients/PatientDetailPage'
 import { NewPatientPage } from './pages/patients/NewPatientPage'
 import { PedigreePage } from './pages/patients/PedigreePage'
+import { VariantsPage } from './pages/patients/VariantsPage'
 import { SurveyReviewPage } from './pages/surveys/SurveyReviewPage'
 
 // Public (patient survey)
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="patients/new" element={<NewPatientPage />} />
           <Route path="patients/:id" element={<PatientDetailPage />} />
           <Route path="patients/:id/pedigree" element={<PedigreePage />} />
+          <Route path="patients/:id/variants" element={<VariantsPage />} />
           <Route path="surveys/review/:tokenId" element={<SurveyReviewPage />} />
         </Route>
 

@@ -206,6 +206,17 @@ export function PatientDetailPage() {
             )}
           </div>
 
+          {/* Variantes genéticas */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header"><h3>Variantes genéticas</h3></div>
+            <p style={{ fontSize: 13, color: 'var(--gray-500)', marginBottom: 12, lineHeight: 1.6 }}>
+              Registre las variantes identificadas con nomenclatura HGVS y clasificación ACMG/AMP.
+            </p>
+            <Link to={`/patients/${id}/variants`} className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>
+              ⬟ Ver variantes del caso
+            </Link>
+          </div>
+
           {/* Pedigree status */}
           <div className="card">
             <div className="card-header"><h3>Pedigrí familiar</h3></div>

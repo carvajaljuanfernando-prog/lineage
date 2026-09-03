@@ -28,7 +28,10 @@ export class VariantsService {
       include: {
         variants: {
           orderBy: { createdAt: 'desc' },
-          include: { reclassifications: { orderBy: { reclassifiedAt: 'desc' } } },
+          include: {
+            reclassifications: { orderBy: { reclassifiedAt: 'desc' } },
+            carriers: { include: { familyMember: true } },
+          },
         },
       },
     });
@@ -57,6 +60,23 @@ export class VariantsService {
         nextCheckAt: esVUS ? this.enSeisMeses() : null,
       },
     });
+
+    // Por defecto la variante se atribuye al caso índice (probando) como portador
+    const tree = await this.prisma.familyTree.findUnique({
+      where: { patientId },
+      include: { members: { where: { relationship: 'proband' } } },
+    });
+    const proband = tree?.members?.[0];
+    if (proband) {
+      await this.prisma.variantCarrier.create({
+        data: {
+          variantId: variant.id,
+          familyMemberId: proband.id,
+          status: 'CARRIER',
+          notes: 'Asignación automática al caso índice',
+        },
+      });
+    }
 
     await this.prisma.auditLog.create({
       data: {
@@ -152,6 +172,88 @@ export class VariantsService {
     });
 
     return { message: 'Variante eliminada' };
+  }
+
+  /** Estado de segregación: lista de familiares y su condición frente a la variante */
+  async listCarriers(variantId: string, tenantId: string) {
+    const variant = await this.prisma.geneticVariant.findFirst({
+      where: { id: variantId, clinicalRecord: { patient: { tenantId } } },
+      include: { clinicalRecord: true },
+    });
+    if (!variant) throw new NotFoundException('Variante no encontrada');
+
+    const tree = await this.prisma.familyTree.findUnique({
+      where: { patientId: variant.clinicalRecord.patientId },
+      include: { members: { orderBy: [{ generation: 'desc' }, { relationship: 'asc' }] } },
+    });
+    if (!tree) return [];
+
+    const carriers = await this.prisma.variantCarrier.findMany({ where: { variantId } });
+    const mapa = new Map<string, (typeof carriers)[number]>(
+      carriers.map((c) => [c.familyMemberId, c] as const),
+    );
+
+    // Devuelve TODOS los miembros del pedigrí con su estado (NOT_STUDIED si no hay registro)
+    return tree.members.map((m) => {
+      const c = mapa.get(m.id);
+      return {
+        familyMemberId: m.id,
+        relationship: m.relationship,
+        firstName: m.firstName,
+        sex: m.sex,
+        generation: m.generation,
+        isAlive: m.isAlive,
+        hasCardiacHistory: m.hasCardiacHistory,
+        status: c?.status ?? 'NOT_STUDIED',
+        testedAt: c?.testedAt ?? null,
+        notes: c?.notes ?? null,
+      };
+    });
+  }
+
+  /** Fija el estado de un familiar frente a la variante */
+  async setCarrier(
+    variantId: string,
+    familyMemberId: string,
+    dto: { status: string; testedAt?: string; notes?: string },
+    tenantId: string,
+    userId: string,
+  ) {
+    const variant = await this.prisma.geneticVariant.findFirst({
+      where: { id: variantId, clinicalRecord: { patient: { tenantId } } },
+      include: { clinicalRecord: true },
+    });
+    if (!variant) throw new NotFoundException('Variante no encontrada');
+
+    const miembro = await this.prisma.familyMember.findFirst({
+      where: { id: familyMemberId, familyTree: { patient: { tenantId } } },
+    });
+    if (!miembro) throw new NotFoundException('Familiar no encontrado');
+
+    const data = {
+      status: dto.status as any,
+      testedAt: dto.testedAt ? new Date(dto.testedAt) : null,
+      notes: dto.notes || null,
+    };
+
+    const carrier = await this.prisma.variantCarrier.upsert({
+      where: { variantId_familyMemberId: { variantId, familyMemberId } },
+      update: data,
+      create: { variantId, familyMemberId, ...data },
+    });
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId,
+        patientId: variant.clinicalRecord.patientId,
+        action: 'variant.carrier_updated',
+        entity: 'VariantCarrier',
+        entityId: carrier.id,
+        metadata: { gene: variant.gene, familiar: miembro.firstName, estado: dto.status },
+      },
+    });
+
+    return carrier;
   }
 
   private enSeisMeses() {

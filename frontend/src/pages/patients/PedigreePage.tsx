@@ -40,6 +40,11 @@ const REL_ES: Record<string, string> = {
 }
 
 /* generación de base de datos → número romano de pedigrí */
+const CLAS_ES: Record<string, string> = {
+  PATHOGENIC: 'Patogénica', LIKELY_PATHOGENIC: 'Probablemente patogénica',
+  VUS: 'VUS', LIKELY_BENIGN: 'Probablemente benigna', BENIGN: 'Benigna',
+}
+
 const ROMANO: Record<number, string> = { 2: 'I', 1: 'II', 0: 'III', [-1]: 'IV' }
 
 const edadDe = (m: Member): number | null => {
@@ -65,6 +70,20 @@ export function PedigreePage() {
     queryKey: ['patient', id],
     queryFn: () => api.get(`/patients/${id}`).then(r => r.data),
   })
+  const { data: variants = [] } = useQuery({
+    queryKey: ['variants', id],
+    queryFn: () => api.get(`/variants/patient/${id}`).then(r => r.data),
+  })
+  const [variantIdSel, setVariantIdSel] = useState<string>('')
+  const variante = variants.find((v: any) => v.id === variantIdSel) || variants[0] || null
+  const { data: carriers = [] } = useQuery({
+    queryKey: ['carriers', variante?.id],
+    queryFn: () => api.get(`/variants/${variante.id}/carriers`).then(r => r.data),
+    enabled: !!variante?.id,
+  })
+  const estadoPorMiembro = new Map<string, string>(
+    (carriers as any[]).map((c: any) => [c.familyMemberId, c.status]),
+  )
 
   /* ── numeración de pedigrí: I-1, II-2, III-1… ── */
   const numeracion = useCallback((members: Member[]) => {
@@ -235,6 +254,21 @@ export function PedigreePage() {
       ctx.beginPath()
       male ? ctx.rect(x - S, y - S, 2 * S, 2 * S) : ctx.arc(x, y, S, 0, Math.PI * 2)
       ctx.fill(); ctx.stroke(); ctx.setLineDash([])
+      /* marca de portador de la variante: punto central relleno */
+      const estado = n.m ? estadoPorMiembro.get(n.m.id) : undefined
+      if (estado === 'CARRIER') {
+        ctx.fillStyle = '#111827'
+        ctx.beginPath(); ctx.arc(x, y, 5.5, 0, Math.PI * 2); ctx.fill()
+      } else if (estado === 'PENDING') {
+        ctx.strokeStyle = '#d97706'; ctx.lineWidth = 1.6
+        ctx.beginPath(); ctx.arc(x, y, 5.5, 0, Math.PI * 2); ctx.stroke()
+        ctx.fillStyle = '#d97706'; ctx.font = 'bold 8px Georgia, serif'; ctx.textAlign = 'center'
+        ctx.fillText('?', x, y + 3)
+      } else if (estado === 'NON_CARRIER') {
+        ctx.strokeStyle = '#16a34a'; ctx.lineWidth = 1.8
+        ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.lineTo(x + 4, y); ctx.stroke()
+      }
+
       if (dead) {
         ctx.strokeStyle = '#374151'; ctx.lineWidth = 1.9
         ctx.beginPath(); ctx.moveTo(x - S - 6, y + S + 6); ctx.lineTo(x + S + 6, y - S - 6); ctx.stroke()
@@ -278,7 +312,7 @@ export function PedigreePage() {
     })
 
     /* ── leyenda ── */
-    const LW = 168, LH = 132
+    const LW = 178, LH = variante ? 190 : 132
     const lx = W - LW - 16, ly = H - LH - 14
     ctx.fillStyle = 'rgba(253,250,246,0.97)'; ctx.strokeStyle = 'rgba(139,90,60,0.3)'; ctx.lineWidth = 1
     ctx.beginPath(); ctx.roundRect(lx, ly, LW, LH, 7); ctx.fill(); ctx.stroke()
@@ -290,6 +324,11 @@ export function PedigreePage() {
       { t: 'sq', f: '#fecaca', s: AFF, txt: 'Antecedente cardiaco' },
       { t: 'dead', txt: 'Fallecido/a' },
       { t: 'prob', txt: 'Paciente índice' },
+      ...(variante ? [
+        { t: 'carrier', txt: 'Portador de la variante' },
+        { t: 'noncarrier', txt: 'No portador' },
+        { t: 'pending', txt: 'Resultado pendiente' },
+      ] : []),
     ]
     items.forEach((it, i) => {
       const yy = ly + 36 + i * 19, xx = lx + 19
@@ -305,6 +344,20 @@ export function PedigreePage() {
         ctx.beginPath(); ctx.moveTo(xx - 13, yy + 11); ctx.lineTo(xx - 6, yy + 5); ctx.stroke()
         ctx.beginPath(); ctx.moveTo(xx - 5, yy + 4); ctx.lineTo(xx - 9, yy + 5); ctx.lineTo(xx - 7, yy + 9)
         ctx.closePath(); ctx.fill()
+      } else if (it.t === 'carrier') {
+        ctx.strokeStyle = EDGE; ctx.fillStyle = '#fdf6ee'
+        ctx.beginPath(); ctx.rect(xx - 6, yy - 6, 12, 12); ctx.fill(); ctx.stroke()
+        ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.arc(xx, yy, 3.2, 0, Math.PI * 2); ctx.fill()
+      } else if (it.t === 'noncarrier') {
+        ctx.strokeStyle = EDGE; ctx.fillStyle = '#fdf6ee'
+        ctx.beginPath(); ctx.rect(xx - 6, yy - 6, 12, 12); ctx.fill(); ctx.stroke()
+        ctx.strokeStyle = '#16a34a'; ctx.lineWidth = 1.6
+        ctx.beginPath(); ctx.moveTo(xx - 3, yy); ctx.lineTo(xx + 3, yy); ctx.stroke()
+      } else if (it.t === 'pending') {
+        ctx.strokeStyle = EDGE; ctx.fillStyle = '#fdf6ee'
+        ctx.beginPath(); ctx.rect(xx - 6, yy - 6, 12, 12); ctx.fill(); ctx.stroke()
+        ctx.fillStyle = '#d97706'; ctx.font = 'bold 8px Georgia, serif'; ctx.textAlign = 'center'
+        ctx.fillText('?', xx, yy + 3)
       } else if (it.t === 'sq') {
         ctx.strokeStyle = it.s; ctx.fillStyle = it.f
         ctx.beginPath(); ctx.rect(xx - 6, yy - 6, 12, 12); ctx.fill(); ctx.stroke()
@@ -323,6 +376,16 @@ export function PedigreePage() {
       ? `Pedigrí Familiar — ${patient?.firstName || ''} ${patient?.lastName || ''}`.trim()
       : 'Pedigrí Familiar'
     ctx.fillText(titulo, W / 2, 32)
+    if (variante) {
+      ctx.fillStyle = '#5c3317'; ctx.font = 'italic 10.5px Georgia, serif'
+      const clasEs: Record<string, string> = {
+        PATHOGENIC: 'Patogénica', LIKELY_PATHOGENIC: 'Probablemente patogénica',
+        VUS: 'VUS', LIKELY_BENIGN: 'Probablemente benigna', BENIGN: 'Benigna',
+      }
+      const desc = [variante.gene, variante.hgvsCoding, variante.hgvsProtein].filter(Boolean).join(' ')
+      ctx.fillText(`${desc} · ${clasEs[variante.classification] || variante.classification}`
+        + (variante.inheritancePattern ? ` · ${variante.inheritancePattern}` : ''), W / 2, 50)
+    }
     if (modo !== 'completo') {
       ctx.fillStyle = 'rgba(92,51,23,0.55)'; ctx.font = 'italic 9.5px Georgia, serif'
       ctx.fillText('Datos anonimizados — numeración estándar de pedigrí', W / 2, 48)
@@ -331,7 +394,7 @@ export function PedigreePage() {
       ctx.fillStyle = 'rgba(92,51,23,0.5)'; ctx.font = 'italic 9px Georgia, serif'; ctx.textAlign = 'left'
       ctx.fillText('~ edad aproximada', 14, H - 16)
     }
-  }, [tree, patient, modo, numeracion])
+  }, [tree, patient, modo, numeracion, variante, carriers])
 
   useEffect(() => { draw() }, [draw])
 
@@ -414,6 +477,31 @@ export function PedigreePage() {
           </div>
         )}
       </div>
+
+      {/* Selector de variante */}
+      {variants.length > 0 && (
+        <div className="card" style={{ padding: '14px 16px', marginBottom: 14 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 9 }}>
+            Variante mostrada en el pedigrí
+          </div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select value={variante?.id || ''} onChange={e => setVariantIdSel(e.target.value)} style={{ maxWidth: 420 }}>
+              {variants.map((v: any) => (
+                <option key={v.id} value={v.id}>
+                  {[v.gene, v.hgvsCoding].filter(Boolean).join(' ')} — {CLAS_ES[v.classification] || v.classification}
+                </option>
+              ))}
+            </select>
+            <Link to={`/patients/${id}/variants`} className="btn btn-secondary btn-sm">Gestionar variantes</Link>
+          </div>
+          {variante && (
+            <p style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 9 }}>
+              Los símbolos muestran quién es portador, no portador o tiene resultado pendiente.
+              El estado se define en la sección de segregación familiar de la variante.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="card" style={{ padding: 14, marginBottom: 16 }}>
         <canvas ref={canvasRef} width={980} height={600}

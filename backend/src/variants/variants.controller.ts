@@ -28,6 +28,23 @@ export class VariantsController {
     return this.variantsService.update(variantId, dto, req.user.tenantId, req.user.id);
   }
 
+  @Get(':variantId/carriers')
+  @ApiOperation({ summary: 'Estado de segregación familiar de la variante' })
+  listCarriers(@Param('variantId') variantId: string, @Request() req: any) {
+    return this.variantsService.listCarriers(variantId, req.user.tenantId);
+  }
+
+  @Put(':variantId/carriers/:familyMemberId')
+  @ApiOperation({ summary: 'Definir estado de un familiar frente a la variante' })
+  setCarrier(
+    @Param('variantId') variantId: string,
+    @Param('familyMemberId') familyMemberId: string,
+    @Body() dto: any,
+    @Request() req: any,
+  ) {
+    return this.variantsService.setCarrier(variantId, familyMemberId, dto, req.user.tenantId, req.user.id);
+  }
+
   @Delete(':variantId')
   @ApiOperation({ summary: 'Eliminar variante' })
   remove(@Param('variantId') variantId: string, @Request() req: any) {

@@ -26,6 +26,23 @@ const CIGOSIDAD = [
 ]
 const CIG = (v?: string) => CIGOSIDAD.find(c => c.v === v)?.l || '—'
 
+const ESTADOS = [
+  { v: 'CARRIER',     l: 'Portador',            badge: 'badge-red',    desc: 'Estudio realizado: variante presente' },
+  { v: 'NON_CARRIER', l: 'No portador',         badge: 'badge-green',  desc: 'Estudio realizado: variante ausente' },
+  { v: 'PENDING',     l: 'Resultado pendiente',  badge: 'badge-yellow', desc: 'Muestra tomada, sin resultado aún' },
+  { v: 'NOT_STUDIED', l: 'No estudiado',         badge: 'badge-gray',   desc: 'No se le ha realizado el estudio dirigido' },
+]
+const EST = (v: string) => ESTADOS.find(e => e.v === v)
+
+const REL_ES: Record<string, string> = {
+  proband: 'Caso índice', mother: 'Madre', father: 'Padre',
+  son: 'Hijo', daughter: 'Hija', brother: 'Hermano', sister: 'Hermana',
+  mat_grandmother: 'Abuela materna', mat_grandfather: 'Abuelo materno',
+  pat_grandmother: 'Abuela paterna', pat_grandfather: 'Abuelo paterno',
+  mat_uncle: 'Tío materno', mat_aunt: 'Tía materna',
+  pat_uncle: 'Tío paterno', pat_aunt: 'Tía paterna',
+}
+
 const HERENCIA = [
   '', 'Autosómica dominante', 'Autosómica recesiva',
   'Ligada al X dominante', 'Ligada al X recesiva', 'Mitocondrial', 'Desconocida',
@@ -41,6 +58,69 @@ function Campo({ label, children, ancho }: any) {
   return <div style={{ gridColumn: ancho ? `span ${ancho}` : undefined }}><label>{label}</label>{children}</div>
 }
 
+function Segregacion({ variantId, patientId }: { variantId: string; patientId?: string }) {
+  const qc = useQueryClient()
+  const { data: miembros = [], isLoading } = useQuery({
+    queryKey: ['carriers', variantId],
+    queryFn: () => api.get(`/variants/${variantId}/carriers`).then(r => r.data),
+  })
+
+  const set = useMutation({
+    mutationFn: ({ fid, status }: { fid: string; status: string }) =>
+      api.put(`/variants/${variantId}/carriers/${fid}`, { status }).then(r => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['carriers', variantId] })
+      qc.invalidateQueries({ queryKey: ['variants', patientId] })
+      qc.invalidateQueries({ queryKey: ['pedigree', patientId] })
+    },
+  })
+
+  if (isLoading) return <div style={{ padding: 16, textAlign: 'center' }}><span className="spinner" /></div>
+  if (miembros.length === 0) return (
+    <div className="alert alert-warning" style={{ fontSize: 12.5 }}>
+      Para registrar la segregación familiar debe generarse primero el pedigrí del paciente.
+    </div>
+  )
+
+  const conteo = (st: string) => miembros.filter((m: any) => m.status === st).length
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 12 }}>
+        {ESTADOS.map(e => (
+          <span key={e.v} className={`badge ${e.badge}`}>{e.l}: {conteo(e.v)}</span>
+        ))}
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Familiar</th><th>Parentesco</th><th>Estado frente a la variante</th></tr></thead>
+          <tbody>
+            {miembros.map((m: any) => (
+              <tr key={m.familyMemberId}>
+                <td style={{ fontWeight: 500 }}>
+                  {m.firstName || '—'}
+                  {m.hasCardiacHistory && <span className="badge badge-red" style={{ marginLeft: 7 }}>♥</span>}
+                  {!m.isAlive && <span className="badge badge-gray" style={{ marginLeft: 5 }}>†</span>}
+                </td>
+                <td style={{ color: 'var(--gray-600)', fontSize: 12.5 }}>{REL_ES[m.relationship] || m.relationship}</td>
+                <td>
+                  <select value={m.status} style={{ maxWidth: 220 }}
+                    onChange={e => set.mutate({ fid: m.familyMemberId, status: e.target.value })}>
+                    {ESTADOS.map(e => <option key={e.v} value={e.v}>{e.l}</option>)}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ fontSize: 11.5, color: 'var(--gray-500)', marginTop: 10, lineHeight: 1.6 }}>
+        Los familiares marcados como <b>no estudiados</b> son los candidatos naturales al tamizaje en cascada.
+      </p>
+    </div>
+  )
+}
+
 export function VariantsPage() {
   const { id } = useParams<{ id: string }>()
   const qc = useQueryClient()
@@ -48,6 +128,7 @@ export function VariantsPage() {
   const [editando, setEditando] = useState<string | null>(null)
   const [abierto, setAbierto] = useState(false)
   const [error, setError] = useState('')
+  const [segregacionAbierta, setSegregacionAbierta] = useState<string | null>(null)
 
   const { data: patient } = useQuery({
     queryKey: ['patient', id],
@@ -231,6 +312,14 @@ export function VariantsPage() {
                     {v.inheritancePattern && ` · ${v.inheritancePattern}`}
                     {v.clinvarId && ` · ClinVar ${v.clinvarId}`}
                   </div>
+                  {v.carriers?.length > 0 && (
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginTop: 8 }}>
+                      <b>Portadores:</b>{' '}
+                      {v.carriers.filter((c: any) => c.status === 'CARRIER')
+                        .map((c: any) => c.familyMember?.firstName || REL_ES[c.familyMember?.relationship] || '—')
+                        .join(', ') || 'ninguno registrado'}
+                    </div>
+                  )}
                   {v.notes && (
                     <p style={{ fontSize: 12.5, color: 'var(--gray-600)', marginTop: 8, lineHeight: 1.6 }}>{v.notes}</p>
                   )}
@@ -251,6 +340,10 @@ export function VariantsPage() {
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-secondary btn-sm"
+                    onClick={() => setSegregacionAbierta(segregacionAbierta === v.id ? null : v.id)}>
+                    {segregacionAbierta === v.id ? 'Ocultar familia' : '◈ Segregación familiar'}
+                  </button>
                   <button className="btn btn-secondary btn-sm" onClick={() => editar(v)}>Editar</button>
                   <button className="btn btn-danger btn-sm"
                     onClick={() => { if (confirm(`¿Eliminar la variante de ${v.gene}?`)) eliminar.mutate(v.id) }}>
@@ -258,6 +351,16 @@ export function VariantsPage() {
                   </button>
                 </div>
               </div>
+
+              {segregacionAbierta === v.id && (
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--gray-200)' }}>
+                  <h3 style={{ marginBottom: 4 }}>Segregación familiar</h3>
+                  <p style={{ fontSize: 12.5, color: 'var(--gray-500)', marginBottom: 12 }}>
+                    Indique el resultado del estudio dirigido en cada familiar del pedigrí.
+                  </p>
+                  <Segregacion variantId={v.id} patientId={id} />
+                </div>
+              )}
             </div>
           )
         })
